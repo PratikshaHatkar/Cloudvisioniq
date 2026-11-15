@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
   Video,
@@ -11,6 +11,7 @@ import {
   X,
   Radio,
   ExternalLink,
+  Home,
 } from 'lucide-react';
 import { api } from '../api/client';
 
@@ -46,7 +47,7 @@ export const Layout = ({ children }) => {
   }, []);
 
   const navLinks = [
-    { to: '/', label: 'Overview', icon: LayoutDashboard },
+    { to: '/overview', label: 'Overview', icon: LayoutDashboard },
     { to: '/live', label: 'Live Surveillance', icon: Cctv },
     { to: '/analysis', label: 'Video Analysis', icon: Video },
     { to: '/events', label: 'Detected Events', icon: ShieldAlert },
@@ -59,8 +60,12 @@ export const Layout = ({ children }) => {
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-64 bg-[#0F172A] border-r border-slate-800/80 fixed inset-y-0 z-40">
         {/* Brand */}
-        <div className="h-16 flex items-center px-6 border-b border-slate-800/80 gap-3">
-          <div className="p-2 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400">
+        <Link
+          to="/"
+          title="Return to Landing Page"
+          className="h-16 flex items-center px-6 border-b border-slate-800/80 gap-3 hover:bg-slate-800/40 transition-colors group"
+        >
+          <div className="p-2 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400 group-hover:scale-105 transition-transform">
             <Radio className="w-5 h-5 animate-pulse" />
           </div>
           <div>
@@ -72,7 +77,7 @@ export const Layout = ({ children }) => {
             </div>
             <div className="text-[11px] text-slate-400">AI Surveillance System</div>
           </div>
-        </div>
+        </Link>
 
         {/* Navigation Items */}
         <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
@@ -98,6 +103,16 @@ export const Layout = ({ children }) => {
               </NavLink>
             );
           })}
+
+          <div className="pt-4 mt-4 border-t border-slate-800/80">
+            <Link
+              to="/"
+              className="flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all"
+            >
+              <Home className="w-4 h-4 text-blue-400" />
+              <span>Landing Page</span>
+            </Link>
+          </div>
         </nav>
 
         {/* Bottom System Status Widget */}
@@ -180,6 +195,14 @@ export const Layout = ({ children }) => {
                 </NavLink>
               );
             })}
+            <Link
+              to="/"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 border-t border-slate-800/80 mt-2 pt-2"
+            >
+              <Home className="w-4 h-4 text-blue-400" />
+              <span>Landing Page</span>
+            </Link>
           </div>
         )}
 
