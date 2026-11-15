@@ -11,6 +11,7 @@ import {
   ArrowRight,
   AlertCircle,
   Eye,
+  Trash2,
 } from 'lucide-react';
 import { api, getEvidenceUrl } from '../api/client';
 import StatsCard from '../components/StatsCard';
@@ -26,6 +27,22 @@ export const OverviewPage = () => {
   const [videosData, setVideosData] = useState({ total: 0, videos: [] });
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [showConfirmClear, setShowConfirmClear] = useState(false);
+
+  const handleConfirmClear = async () => {
+    setIsClearing(true);
+    try {
+      await api.clearAllEvents();
+      setEventsData({ total: 0, events: [] });
+      setShowConfirmClear(false);
+      await fetchData();
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message || 'Failed to clear suspicious events history.');
+    } finally {
+      setIsClearing(false);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -108,6 +125,17 @@ export const OverviewPage = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          {eventsData.total > 0 && (
+            <button
+              onClick={() => setShowConfirmClear(true)}
+              disabled={isClearing}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20 hover:text-rose-300 transition-all disabled:opacity-50"
+              title="Clear all detected suspicious events history"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Clear History
+            </button>
+          )}
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
@@ -241,12 +269,24 @@ export const OverviewPage = () => {
               <Clock className="w-4 h-4 text-blue-400" />
               Recent Suspicious Detections
             </h3>
-            <Link
-              to="/events"
-              className="text-xs text-blue-400 hover:text-blue-300 font-medium inline-flex items-center gap-1"
-            >
-              View all ({eventsData.total}) <ArrowRight className="w-3 h-3" />
-            </Link>
+            <div className="flex items-center gap-3">
+              {eventsData.total > 0 && (
+                <button
+                  onClick={() => setShowConfirmClear(true)}
+                  disabled={isClearing}
+                  className="text-xs text-rose-400 hover:text-rose-300 font-medium inline-flex items-center gap-1 transition-colors"
+                  title="Clear all suspicious events history"
+                >
+                  <Trash2 className="w-3 h-3" /> Clear History
+                </button>
+              )}
+              <Link
+                to="/events"
+                className="text-xs text-blue-400 hover:text-blue-300 font-medium inline-flex items-center gap-1"
+              >
+                View all ({eventsData.total}) <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
           </div>
 
           {(!eventsData.events || eventsData.events.length === 0) ? (
@@ -395,6 +435,40 @@ export const OverviewPage = () => {
           event={selectedEvent}
           onClose={() => setSelectedEvent(null)}
         />
+      )}
+
+      {/* Confirmation Modal for Clearing History */}
+      {showConfirmClear && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-[#111827] border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1.5">
+              <h3 className="text-lg font-bold text-white">Clear Suspicious Events History?</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                This will permanently delete all <span className="font-semibold text-rose-400">{eventsData.total}</span> detected suspicious events from the database. The counter will reset to 0.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800/80">
+              <button
+                onClick={() => setShowConfirmClear(false)}
+                disabled={isClearing}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmClear}
+                disabled={isClearing}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 transition-all disabled:opacity-50"
+              >
+                {isClearing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                {isClearing ? 'Clearing...' : 'Yes, Delete History'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

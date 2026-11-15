@@ -418,6 +418,62 @@ class StorageRepository:
             print(f"[Storage Error] SQLite _list_events_sqlite failed: {e}")
             return 0, []
 
+    def delete_all_events(self) -> int:
+        """
+        Deletes all detected events history from MongoDB and SQLite.
+        Resets the event counter to zero.
+        """
+        deleted_count = 0
+        db = get_mongo_db()
+        if db is not None:
+            try:
+                res = db["events"].delete_many({})
+                deleted_count = max(deleted_count, res.deleted_count)
+            except Exception as e:
+                print(f"[Storage Error] Mongo delete_all_events failed: {e}")
+
+        try:
+            with SessionLocal() as sq_db:
+                sq_deleted = sq_db.query(Event).delete()
+                sq_db.commit()
+                deleted_count = max(deleted_count, sq_deleted)
+        except Exception as e:
+            print(f"[Storage Error] SQLite delete_all_events failed: {e}")
+
+        # Also clear live surveillance incidents if any
+        try:
+            from src.api.live.storage import get_live_storage
+            get_live_storage().clear_all_incidents()
+        except Exception:
+            pass
+
+        return deleted_count
+
+    def delete_event(self, event_id: str) -> bool:
+        """
+        Deletes a single event by event_id from MongoDB and SQLite.
+        """
+        deleted = False
+        db = get_mongo_db()
+        if db is not None:
+            try:
+                res = db["events"].delete_one({"$or": [{"event_id": event_id}, {"id": event_id}]})
+                if res.deleted_count > 0:
+                    deleted = True
+            except Exception as e:
+                print(f"[Storage Error] Mongo delete_event failed: {e}")
+
+        try:
+            with SessionLocal() as sq_db:
+                sq_deleted = sq_db.query(Event).filter(Event.id == event_id).delete()
+                sq_db.commit()
+                if sq_deleted > 0:
+                    deleted = True
+        except Exception as e:
+            print(f"[Storage Error] SQLite delete_event failed: {e}")
+
+        return deleted
+
     def list_videos(self, limit: int = 50, offset: int = 0) -> Tuple[int, List[Dict[str, Any]]]:
         """
         Retrieves uploaded videos with pagination from MongoDB or SQLite fallback.

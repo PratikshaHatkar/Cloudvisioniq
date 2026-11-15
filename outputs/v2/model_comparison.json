@@ -1,0 +1,99 @@
+{
+    "overall_metrics": {
+        "v1": {
+            "accuracy": 0.38143036386449186,
+            "macro_f1": 0.26956208144817967,
+            "weighted_f1": 0.3568046112515082,
+            "test_clips": 797.0
+        },
+        "v2": {
+            "accuracy": 0.6669520547945206,
+            "macro_f1": 0.5836900523045383,
+            "weighted_f1": 0.6476058621487013,
+            "test_clips": 1168
+        },
+        "delta": {
+            "accuracy_change": 0.2855,
+            "macro_f1_change": 0.3141
+        }
+    },
+    "per_class_comparison": {
+        "Normal": {
+            "v1_precision": 0.335,
+            "v1_recall": 0.37640449438202245,
+            "v1_f1": 0.3544973544973545,
+            "v1_support": 178.0,
+            "v2_precision": 0.5213675213675214,
+            "v2_recall": 0.61,
+            "v2_f1": 0.5622119815668203,
+            "v2_support": 200.0,
+            "f1_improvement": 0.2077
+        },
+        "Fighting": {
+            "v1_precision": 0.0,
+            "v1_recall": 0.0,
+            "v1_f1": 0.0,
+            "v1_support": 21.0,
+            "v2_precision": 0.8847262247838616,
+            "v2_recall": 0.9839743589743589,
+            "v2_f1": 0.9317147192716236,
+            "v2_support": 312.0,
+            "f1_improvement": 0.9317
+        },
+        "Robbery": {
+            "v1_precision": 0.4330357142857143,
+            "v1_recall": 0.3310580204778157,
+            "v1_f1": 0.37524177949709864,
+            "v1_support": 293.0,
+            "v2_precision": 0.5898123324396782,
+            "v2_recall": 0.6918238993710691,
+            "v2_f1": 0.6367583212735166,
+            "v2_support": 318.0,
+            "f1_improvement": 0.2615
+        },
+        "Shoplifting": {
+            "v1_precision": 0.0,
+            "v1_recall": 0.0,
+            "v1_f1": 0.0,
+            "v1_support": 20.0,
+            "v2_precision": 0.62,
+            "v2_recall": 0.5636363636363636,
+            "v2_f1": 0.5904761904761905,
+            "v2_support": 55.0,
+            "f1_improvement": 0.5905
+        },
+        "Burglary": {
+            "v1_precision": 0.29385964912280704,
+            "v1_recall": 0.4407894736842105,
+            "v1_f1": 0.3526315789473684,
+            "v1_support": 152.0,
+            "v2_precision": 0.5507246376811594,
+            "v2_recall": 0.25,
+            "v2_f1": 0.3438914027149321,
+            "v2_support": 152.0,
+            "f1_improvement": -0.0087
+        },
+        "RoadAccidents": {
+            "v1_precision": 0.5074626865671642,
+            "v1_recall": 0.9066666666666666,
+            "v1_f1": 0.6507177033492823,
+            "v1_support": 75.0,
+            "v2_precision": 0.6428571428571429,
+            "v2_recall": 0.7142857142857143,
+            "v2_f1": 0.6766917293233082,
+            "v2_support": 63.0,
+            "f1_improvement": 0.026
+        },
+        "Vandalism": {
+            "v1_precision": 0.7142857142857143,
+            "v1_recall": 0.08620689655172414,
+            "v1_f1": 0.15384615384615385,
+            "v1_support": 58.0,
+            "v2_precision": 0.64,
+            "v2_recall": 0.23529411764705882,
+            "v2_f1": 0.34408602150537637,
+            "v2_support": 68.0,
+            "f1_improvement": 0.1902
+        }
+    }
+}

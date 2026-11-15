@@ -42,25 +42,58 @@ export const StatusBadge = ({ status }) => {
   }
 };
 
-export const ActivityBadge = ({ activity }) => {
+export const ActivityBadge = ({ activity, className = '' }) => {
   const label = activity || 'Unknown';
 
-  const colorMap = {
-    Fighting: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
-    Robbery: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-    Burglary: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
-    Shoplifting: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-    Vandalism: 'bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/30',
-    RoadAccidents: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
-    Normal: 'bg-slate-700/30 text-slate-400 border-slate-600/30',
+  const categoryMap = {
+    Fighting: {
+      badge: 'bg-black/85 backdrop-blur-md border-rose-500/80 text-rose-100 shadow-md shadow-black/80',
+      icon: 'text-rose-400',
+      dot: 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]',
+    },
+    Robbery: {
+      badge: 'bg-black/85 backdrop-blur-md border-amber-500/80 text-amber-100 shadow-md shadow-black/80',
+      icon: 'text-amber-400',
+      dot: 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)]',
+    },
+    Burglary: {
+      badge: 'bg-black/85 backdrop-blur-md border-orange-500/80 text-orange-100 shadow-md shadow-black/80',
+      icon: 'text-orange-400',
+      dot: 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]',
+    },
+    Shoplifting: {
+      badge: 'bg-black/85 backdrop-blur-md border-purple-400/80 text-purple-100 shadow-md shadow-black/80',
+      icon: 'text-purple-400',
+      dot: 'bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.8)]',
+    },
+    Vandalism: {
+      badge: 'bg-black/85 backdrop-blur-md border-fuchsia-400/80 text-fuchsia-100 shadow-md shadow-black/80',
+      icon: 'text-fuchsia-400',
+      dot: 'bg-fuchsia-500 shadow-[0_0_8px_rgba(217,70,239,0.8)]',
+    },
+    RoadAccidents: {
+      badge: 'bg-black/85 backdrop-blur-md border-cyan-400/80 text-cyan-100 shadow-md shadow-black/80',
+      icon: 'text-cyan-400',
+      dot: 'bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.8)]',
+    },
+    Normal: {
+      badge: 'bg-black/85 backdrop-blur-md border-emerald-500/80 text-emerald-100 shadow-md shadow-black/80',
+      icon: 'text-emerald-400',
+      dot: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]',
+    },
   };
 
-  const style = colorMap[label] || 'bg-blue-500/15 text-blue-400 border-blue-500/30';
+  const style = categoryMap[label] || {
+    badge: 'bg-black/85 backdrop-blur-md border-blue-500/80 text-blue-100 shadow-md shadow-black/80',
+    icon: 'text-blue-400',
+    dot: 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]',
+  };
 
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${style}`}>
-      <ShieldAlert className="w-3.5 h-3.5" />
-      {label}
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide border ${style.badge} ${className}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
+      <ShieldAlert className={`w-3.5 h-3.5 ${style.icon} shrink-0`} />
+      <span>{label}</span>
     </span>
   );
 };

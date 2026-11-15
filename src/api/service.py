@@ -41,7 +41,9 @@ class ModelManager:
         self.model = None
         self.model_name = "r2plus1d_18"
         self.is_loaded = False
-        self.checkpoint_path = os.path.join(CHECKPOINTS_DIR, "best_model.pth")
+        v2_ckpt = os.path.join(CHECKPOINTS_DIR, "v2", "best_model.pth")
+        default_ckpt = v2_ckpt if os.path.exists(v2_ckpt) else os.path.join(CHECKPOINTS_DIR, "best_model.pth")
+        self.checkpoint_path = os.environ.get("MODEL_CHECKPOINT_PATH", default_ckpt)
         self.device = DEVICE
         self.inference_lock = threading.Lock()
 

@@ -105,7 +105,19 @@ export const api = {
     return res.data;
   },
 
-  // 8. Semantic Search & Grounded AI Chatbot
+  // 8. Delete All Events History
+  async clearAllEvents() {
+    const res = await apiClient.delete('/api/events');
+    return res.data;
+  },
+
+  // 9. Delete Single Event
+  async deleteEvent(eventId) {
+    const res = await apiClient.delete(`/api/events/${eventId}`);
+    return res.data;
+  },
+
+  // 10. Semantic Search & Grounded AI Chatbot
   async chatQuery({ query, video_id, activity, min_confidence, limit = 10 } = {}) {
     const res = await apiClient.post('/api/chat/query', {
       query,

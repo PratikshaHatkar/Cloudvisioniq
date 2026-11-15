@@ -12,7 +12,8 @@ import {
   AlertCircle,
   SlidersHorizontal,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Trash2,
 } from 'lucide-react';
 import { api, getEvidenceUrl } from '../api/client';
 import { ActivityBadge } from '../components/StatusBadge';
@@ -49,6 +50,23 @@ export const EventsPage = () => {
   const [error, setError] = useState(null);
   const [eventsData, setEventsData] = useState({ total: 0, events: [] });
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [isClearing, setIsClearing] = useState(false);
+  const [showConfirmClear, setShowConfirmClear] = useState(false);
+
+  const handleConfirmClear = async () => {
+    setIsClearing(true);
+    try {
+      await api.clearAllEvents();
+      setEventsData({ total: 0, events: [] });
+      setShowConfirmClear(false);
+      setPage(0);
+      await fetchEvents();
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message || 'Failed to clear suspicious events history.');
+    } finally {
+      setIsClearing(false);
+    }
+  };
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -141,6 +159,18 @@ export const EventsPage = () => {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-blue-400' : ''}`} />
           </button>
+
+          {eventsData.total > 0 && (
+            <button
+              onClick={() => setShowConfirmClear(true)}
+              disabled={isClearing}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-semibold transition-all disabled:opacity-50"
+              title="Delete all detected events"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Clear History
+            </button>
+          )}
         </div>
       </div>
 
@@ -289,7 +319,7 @@ export const EventsPage = () => {
                     e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><rect fill="%230F172A" width="320" height="180"/><text fill="%2364748B" font-family="sans-serif" font-size="12" x="50%" y="50%" text-anchor="middle">No Snapshot</text></svg>';
                   }}
                 />
-                <div className="absolute top-2.5 left-2.5">
+                <div className="absolute top-2.5 left-2.5 z-10">
                   <ActivityBadge activity={ev.activity_label} />
                 </div>
                 <div className="absolute bottom-2.5 right-2.5 px-2 py-0.5 rounded bg-black/75 backdrop-blur-sm text-[11px] font-mono text-white">
@@ -431,6 +461,40 @@ export const EventsPage = () => {
           event={selectedEvent}
           onClose={() => setSelectedEvent(null)}
         />
+      )}
+
+      {/* Confirmation Modal for Clearing History */}
+      {showConfirmClear && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-[#111827] border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1.5">
+              <h3 className="text-lg font-bold text-white">Clear All Detected Events?</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                This will permanently delete all <span className="font-semibold text-rose-400">{eventsData.total}</span> detected suspicious events from the database. The counter will reset to 0.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800/80">
+              <button
+                onClick={() => setShowConfirmClear(false)}
+                disabled={isClearing}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmClear}
+                disabled={isClearing}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 transition-all disabled:opacity-50"
+              >
+                {isClearing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                {isClearing ? 'Clearing...' : 'Yes, Delete All'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

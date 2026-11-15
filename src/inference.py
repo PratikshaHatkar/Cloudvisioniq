@@ -166,7 +166,9 @@ def detect_suspicious_events(video_path, model, threshold=0.55, window_sec=2.0, 
 def main():
     parser = argparse.ArgumentParser(description="Inference on Unseen CCTV Video")
     parser.add_argument("--video", type=str, required=True, help="Path to input video file")
-    parser.add_argument("--checkpoint", type=str, default=os.path.join(CHECKPOINTS_DIR, "best_model.pth"))
+    v2_ckpt = os.path.join(CHECKPOINTS_DIR, "v2", "best_model.pth")
+    default_ckpt = v2_ckpt if os.path.exists(v2_ckpt) else os.path.join(CHECKPOINTS_DIR, "best_model.pth")
+    parser.add_argument("--checkpoint", type=str, default=default_ckpt)
     parser.add_argument("--threshold", type=float, default=0.55, help="Confidence threshold for anomaly alert")
     parser.add_argument("--window_sec", type=float, default=2.0)
     parser.add_argument("--stride_sec", type=float, default=1.0)

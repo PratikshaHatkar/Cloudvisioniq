@@ -1,0 +1,33 @@
+{
+    "version": "Phase 1 - v2",
+    "total_verified_clips": 7514,
+    "classes": [
+        "Normal",
+        "Fighting",
+        "Robbery",
+        "Shoplifting",
+        "Burglary",
+        "RoadAccidents",
+        "Vandalism"
+    ],
+    "class_distribution": {
+        "Fighting": 1956,
+        "Robbery": 1892,
+        "Normal": 1545,
+        "Burglary": 1009,
+        "RoadAccidents": 461,
+        "Vandalism": 404,
+        "Shoplifting": 247
+    },
+    "splits": {
+        "train_clips": 5243,
+        "val_clips": 1103,
+        "test_clips": 1168
+    },
+    "video_properties": {
+        "fps": 30.0,
+        "sampled_frames_per_clip": 16,
+        "input_resolution": "112x112",
+        "corrupted_or_empty_files": 0
+    }
+}

@@ -444,6 +444,31 @@ class LiveStorageRepository:
             print(f"[LiveStorage Error] SQLite list_incidents failed: {e}")
             return []
 
+    def clear_all_incidents(self) -> int:
+        """
+        Deletes all live incidents and notifications from MongoDB and SQLite.
+        """
+        deleted = 0
+        db = get_mongo_db()
+        if db is not None:
+            try:
+                res_inc = db["live_incidents"].delete_many({})
+                db["live_notifications"].delete_many({})
+                deleted = max(deleted, res_inc.deleted_count)
+            except Exception as e:
+                print(f"[LiveStorage Error] MongoDB clear_all_incidents failed: {e}")
+
+        try:
+            with SessionLocal() as session:
+                sq_del = session.query(LiveIncident).delete()
+                session.query(LiveNotification).delete()
+                session.commit()
+                deleted = max(deleted, sq_del)
+        except Exception as e:
+            print(f"[LiveStorage Error] SQLite clear_all_incidents failed: {e}")
+
+        return deleted
+
     # -------------------------------------------------------------
     # Notifications CRUD
     # -------------------------------------------------------------

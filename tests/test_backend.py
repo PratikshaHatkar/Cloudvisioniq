@@ -250,3 +250,56 @@ def test_11_cross_video_events_filtering():
     res_vid = client.get(f"/api/events?video_id={test_vid_id}")
     assert res_vid.status_code == 200
     assert len(res_vid.json()["events"]) == 2
+
+def test_12_delete_events_endpoints():
+    """
+    DELETE /api/events/{event_id} and DELETE /api/events correctly delete events.
+    """
+    import uuid
+    uid = uuid.uuid4().hex[:8]
+    test_vid_id = f"del-test-{uid}"
+    ev_del_id = f"ev-del-{uid}"
+
+    db = SessionLocal()
+    vid = Video(id=test_vid_id, filename="dummy_del.mp4", file_path="dummy_del.mp4", status="completed")
+    db.add(vid)
+    ev = Event(
+        id=ev_del_id, video_id=test_vid_id, activity_label="Burglary",
+        confidence=0.88, start_timestamp=1.0, end_timestamp=3.0,
+        start_time_formatted="00:00:01", end_time_formatted="00:00:03",
+        processing_status="completed"
+    )
+    db.add(ev)
+    db.commit()
+    db.close()
+
+    # Verify single event delete
+    res_del_single = client.delete(f"/api/events/{ev_del_id}")
+    assert res_del_single.status_code == 200
+    assert res_del_single.json()["status"] == "success"
+
+    # Verify 404 for non-existent event
+    res_del_404 = client.delete(f"/api/events/{ev_del_id}")
+    assert res_del_404.status_code == 404
+
+    # Add another event and verify clear all events endpoint
+    db = SessionLocal()
+    ev2 = Event(
+        id=f"ev-clear-{uid}", video_id=test_vid_id, activity_label="Fighting",
+        confidence=0.95, start_timestamp=5.0, end_timestamp=8.0,
+        start_time_formatted="00:00:05", end_time_formatted="00:00:08",
+        processing_status="completed"
+    )
+    db.add(ev2)
+    db.commit()
+    db.close()
+
+    res_clear = client.delete("/api/events")
+    assert res_clear.status_code == 200
+    assert res_clear.json()["status"] == "success"
+    assert res_clear.json()["deleted_count"] >= 1
+
+    # Verify count is now 0
+    res_after = client.get("/api/events")
+    assert res_after.status_code == 200
+    assert res_after.json()["total"] == 0

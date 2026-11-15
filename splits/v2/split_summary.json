@@ -1,0 +1,43 @@
+{
+    "total_clips": 7514,
+    "total_parent_recordings": 2255,
+    "train": {
+        "clips": 5243,
+        "parent_recordings": 1579,
+        "class_distribution": {
+            "Fighting": 1362,
+            "Robbery": 1261,
+            "Normal": 1156,
+            "Burglary": 669,
+            "RoadAccidents": 352,
+            "Vandalism": 290,
+            "Shoplifting": 153
+        }
+    },
+    "val": {
+        "clips": 1103,
+        "parent_recordings": 338,
+        "class_distribution": {
+            "Robbery": 313,
+            "Fighting": 282,
+            "Normal": 189,
+            "Burglary": 188,
+            "Vandalism": 46,
+            "RoadAccidents": 46,
+            "Shoplifting": 39
+        }
+    },
+    "test": {
+        "clips": 1168,
+        "parent_recordings": 338,
+        "class_distribution": {
+            "Robbery": 318,
+            "Fighting": 312,
+            "Normal": 200,
+            "Burglary": 152,
+            "Vandalism": 68,
+            "RoadAccidents": 63,
+            "Shoplifting": 55
+        }
+    }
+}

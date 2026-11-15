@@ -369,6 +369,38 @@ def list_events(
         ]
     )
 
+@app.delete("/api/events", tags=["Events"])
+def clear_all_events():
+    """
+    Deletes all detected suspicious events history across MongoDB and SQLite.
+    Resets the detected event counter to zero.
+    """
+    storage = get_storage()
+    deleted_count = storage.delete_all_events()
+    return {
+        "status": "success",
+        "message": f"Successfully cleared {deleted_count} suspicious events.",
+        "deleted_count": deleted_count
+    }
+
+@app.delete("/api/events/{event_id}", tags=["Events"])
+def delete_single_event(event_id: str):
+    """
+    Deletes a single suspicious event by its event_id.
+    """
+    storage = get_storage()
+    deleted = storage.delete_event(event_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Event with ID '{event_id}' not found."
+        )
+    return {
+        "status": "success",
+        "message": f"Event '{event_id}' deleted successfully.",
+        "event_id": event_id
+    }
+
 # -------------------------------------------------------------
 # 7. Evidence Snapshot Serving Endpoint
 # -------------------------------------------------------------
