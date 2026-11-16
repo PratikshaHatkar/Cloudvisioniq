@@ -11,7 +11,6 @@ import {
   X,
   Radio,
   ExternalLink,
-  Home,
 } from 'lucide-react';
 import { api } from '../api/client';
 
@@ -47,7 +46,7 @@ export const Layout = ({ children }) => {
   }, []);
 
   const navLinks = [
-    { to: '/overview', label: 'Overview', icon: LayoutDashboard },
+    { to: '/', label: 'Overview', icon: LayoutDashboard },
     { to: '/live', label: 'Live Surveillance', icon: Cctv },
     { to: '/analysis', label: 'Video Analysis', icon: Video },
     { to: '/events', label: 'Detected Events', icon: ShieldAlert },
@@ -62,7 +61,6 @@ export const Layout = ({ children }) => {
         {/* Brand */}
         <Link
           to="/"
-          title="Return to Landing Page"
           className="h-16 flex items-center px-6 border-b border-slate-800/80 gap-3 hover:bg-slate-800/40 transition-colors group"
         >
           <div className="p-2 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400 group-hover:scale-105 transition-transform">
@@ -103,16 +101,6 @@ export const Layout = ({ children }) => {
               </NavLink>
             );
           })}
-
-          <div className="pt-4 mt-4 border-t border-slate-800/80">
-            <Link
-              to="/"
-              className="flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all"
-            >
-              <Home className="w-4 h-4 text-blue-400" />
-              <span>Landing Page</span>
-            </Link>
-          </div>
         </nav>
 
         {/* Bottom System Status Widget */}
@@ -195,14 +183,6 @@ export const Layout = ({ children }) => {
                 </NavLink>
               );
             })}
-            <Link
-              to="/"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 border-t border-slate-800/80 mt-2 pt-2"
-            >
-              <Home className="w-4 h-4 text-blue-400" />
-              <span>Landing Page</span>
-            </Link>
           </div>
         )}
 
