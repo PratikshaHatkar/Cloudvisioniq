@@ -444,24 +444,31 @@ class LiveStorageRepository:
             print(f"[LiveStorage Error] SQLite list_incidents failed: {e}")
             return []
 
-    def clear_all_incidents(self) -> int:
+    def clear_all_incidents(self, owner_id: Optional[str] = None) -> int:
         """
-        Deletes all live incidents and notifications from MongoDB and SQLite.
+        Deletes live incidents and notifications from MongoDB and SQLite.
+        If owner_id is specified, deletes only that user's records.
         """
         deleted = 0
         db = get_mongo_db()
+        q = {"owner_id": owner_id} if owner_id else {}
         if db is not None:
             try:
-                res_inc = db["live_incidents"].delete_many({})
-                db["live_notifications"].delete_many({})
+                res_inc = db["live_incidents"].delete_many(q)
+                db["live_notifications"].delete_many(q)
                 deleted = max(deleted, res_inc.deleted_count)
             except Exception as e:
                 print(f"[LiveStorage Error] MongoDB clear_all_incidents failed: {e}")
 
         try:
             with SessionLocal() as session:
-                sq_del = session.query(LiveIncident).delete()
-                session.query(LiveNotification).delete()
+                q_inc = session.query(LiveIncident)
+                q_notif = session.query(LiveNotification)
+                if owner_id:
+                    q_inc = q_inc.filter(LiveIncident.owner_id == owner_id)
+                    q_notif = q_notif.filter(LiveNotification.owner_id == owner_id)
+                sq_del = q_inc.delete()
+                q_notif.delete()
                 session.commit()
                 deleted = max(deleted, sq_del)
         except Exception as e:

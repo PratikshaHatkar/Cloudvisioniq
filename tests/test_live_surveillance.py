@@ -10,10 +10,29 @@ from src.api.live.storage import get_live_storage
 from src.api.live.stream_manager import get_stream_manager, CameraStreamWorker
 from src.api.live.notifications import get_notification_broker
 from src.api.live.inference_service import get_live_inference_service, SUSPICIOUS_ACTIVITIES
+from src.api.storage import get_storage
+from src.api.auth import create_access_token
 
 client = TestClient(app)
 
+def get_client(owner_id: str = "security_officer_1") -> TestClient:
+    storage = get_storage()
+    storage.initialize()
+    u = storage.get_user_by_id(owner_id)
+    if not u:
+        storage.create_user({
+            "id": owner_id,
+            "name": f"Officer {owner_id}",
+            "email": f"{owner_id}@visioniq.io",
+            "password_hash": "dummy_hash"
+        })
+    token = create_access_token({"sub": owner_id, "email": f"{owner_id}@visioniq.io"})
+    c = TestClient(app)
+    c.headers.update({"Authorization": f"Bearer {token}"})
+    return c
+
 def test_01_camera_registration_and_url_masking():
+    c = get_client("security_officer_1")
     payload = {
         "name": "North Gate CCTV",
         "location": "North Entrance Zone 1",
@@ -22,7 +41,7 @@ def test_01_camera_registration_and_url_masking():
         "stream_url": "rtsp://admin:super_secret_password123@192.168.1.105:554/h264Preview_01_main",
         "confidence_threshold": 0.65
     }
-    response = client.post("/api/live/cameras", json=payload)
+    response = c.post("/api/live/cameras", json=payload)
     assert response.status_code == 201
     data = response.json()
     assert data["name"] == "North Gate CCTV"
@@ -34,10 +53,12 @@ def test_01_camera_registration_and_url_masking():
     assert "***" in data["stream_url"]
 
 def test_02_camera_list_and_owner_filtering():
+    c_a = get_client("owner_alpha")
+    c_b = get_client("owner_beta")
+
     # Register camera for owner A
-    res_a = client.post("/api/live/cameras", json={
+    res_a = c_a.post("/api/live/cameras", json={
         "name": "Cam A",
-        "owner_id": "owner_alpha",
         "stream_type": "synthetic",
         "stream_url": "synthetic:0"
     })
@@ -45,9 +66,8 @@ def test_02_camera_list_and_owner_filtering():
     cam_a_id = res_a.json()["id"]
 
     # Register camera for owner B
-    res_b = client.post("/api/live/cameras", json={
+    res_b = c_b.post("/api/live/cameras", json={
         "name": "Cam B",
-        "owner_id": "owner_beta",
         "stream_type": "synthetic",
         "stream_url": "synthetic:1"
     })
@@ -55,28 +75,28 @@ def test_02_camera_list_and_owner_filtering():
     cam_b_id = res_b.json()["id"]
 
     # Filter for owner_alpha
-    list_a = client.get("/api/live/cameras?owner_id=owner_alpha").json()
+    list_a = c_a.get("/api/live/cameras").json()
     assert any(c["id"] == cam_a_id for c in list_a["cameras"])
     assert not any(c["id"] == cam_b_id for c in list_a["cameras"])
 
     # Filter for owner_beta
-    list_b = client.get("/api/live/cameras?owner_id=owner_beta").json()
+    list_b = c_b.get("/api/live/cameras").json()
     assert any(c["id"] == cam_b_id for c in list_b["cameras"])
     assert not any(c["id"] == cam_a_id for c in list_b["cameras"])
 
 def test_03_camera_update_and_delete():
+    c = get_client("warehouse_owner")
     # Create camera
-    res = client.post("/api/live/cameras", json={
+    res = c.post("/api/live/cameras", json={
         "name": "Warehouse Cam",
         "location": "Aisle 4",
-        "owner_id": "warehouse_owner",
         "stream_type": "synthetic",
         "stream_url": "synthetic:test"
     })
     cam_id = res.json()["id"]
 
     # Update camera
-    patch_res = client.patch(f"/api/live/cameras/{cam_id}", json={
+    patch_res = c.patch(f"/api/live/cameras/{cam_id}", json={
         "name": "Warehouse South Cam",
         "confidence_threshold": 0.75
     })
@@ -86,24 +106,24 @@ def test_03_camera_update_and_delete():
     assert updated["confidence_threshold"] == 0.75
 
     # Delete camera
-    del_res = client.delete(f"/api/live/cameras/{cam_id}")
+    del_res = c.delete(f"/api/live/cameras/{cam_id}")
     assert del_res.status_code == 200
 
     # Verify 404
-    get_res = client.get(f"/api/live/cameras/{cam_id}")
+    get_res = c.get(f"/api/live/cameras/{cam_id}")
     assert get_res.status_code == 404
 
 def test_04_synthetic_stream_start_and_stop():
-    res = client.post("/api/live/cameras", json={
+    c = get_client("tester_1")
+    res = c.post("/api/live/cameras", json={
         "name": "Live Test Stream",
-        "owner_id": "tester_1",
         "stream_type": "synthetic",
         "stream_url": "synthetic:0"
     })
     cam_id = res.json()["id"]
 
     # Start monitoring
-    start_res = client.post(f"/api/live/cameras/{cam_id}/start")
+    start_res = c.post(f"/api/live/cameras/{cam_id}/start")
     assert start_res.status_code == 200
     assert start_res.json()["is_monitored"] is True
 
@@ -118,20 +138,20 @@ def test_04_synthetic_stream_start_and_stop():
     assert latest_frame.shape == (360, 640, 3)
 
     # Stop monitoring
-    stop_res = client.post(f"/api/live/cameras/{cam_id}/stop")
+    stop_res = c.post(f"/api/live/cameras/{cam_id}/stop")
     assert stop_res.status_code == 200
     assert stop_res.json()["is_monitored"] is False
     assert worker.running is False
 
 def test_05_mjpeg_stream_generator():
-    res = client.post("/api/live/cameras", json={
+    c = get_client("tester_2")
+    res = c.post("/api/live/cameras", json={
         "name": "MJPEG Test",
-        "owner_id": "tester_2",
         "stream_type": "synthetic",
         "stream_url": "synthetic:0"
     })
     cam_id = res.json()["id"]
-    client.post(f"/api/live/cameras/{cam_id}/start")
+    c.post(f"/api/live/cameras/{cam_id}/start")
     time.sleep(0.2)
 
     gen = get_stream_manager().generate_mjpeg_stream(cam_id)
@@ -206,7 +226,8 @@ def test_07_live_incident_listing_and_acknowledgement():
     assert inc["is_acknowledged"] is False
 
     # Acknowledge through endpoint
-    ack_res = client.patch(f"/api/live/incidents/{inc_id}/acknowledge")
+    c = get_client("officer_ack")
+    ack_res = c.patch(f"/api/live/incidents/{inc_id}/acknowledge")
     assert ack_res.status_code == 200
     assert ack_res.json()["is_acknowledged"] is True
 
@@ -234,19 +255,20 @@ def test_08_notifications_persistence_and_read_status():
         "is_read": False
     })
 
+    c = get_client(owner)
     # List notifications
-    list_res = client.get(f"/api/live/notifications?owner_id={owner}").json()
+    list_res = c.get("/api/live/notifications").json()
     assert list_res["total"] >= 2
     assert list_res["unread_count"] >= 2
 
     # Mark n1 as read
-    client.patch(f"/api/live/notifications/{n1['id']}/read")
-    list_res_after = client.get(f"/api/live/notifications?owner_id={owner}").json()
+    c.patch(f"/api/live/notifications/{n1['id']}/read")
+    list_res_after = c.get("/api/live/notifications").json()
     assert list_res_after["unread_count"] == list_res["unread_count"] - 1
 
     # Mark all as read
-    client.patch(f"/api/live/notifications/read-all?owner_id={owner}")
-    list_res_final = client.get(f"/api/live/notifications?owner_id={owner}").json()
+    c.patch("/api/live/notifications/read-all")
+    list_res_final = c.get("/api/live/notifications").json()
     assert list_res_final["unread_count"] == 0
 
 def test_09_websocket_realtime_alert_delivery():
@@ -258,9 +280,9 @@ def test_09_websocket_realtime_alert_delivery():
         assert data == "pong"
 
 def test_10_invalid_stream_type_rejection():
-    res = client.post("/api/live/cameras", json={
+    c = get_client("attacker")
+    res = c.post("/api/live/cameras", json={
         "name": "Invalid Stream Type",
-        "owner_id": "attacker",
         "stream_type": "malicious_script_inject",
         "stream_url": "ftp://malicious"
     })
@@ -301,12 +323,13 @@ def test_11_incident_and_notification_summary_persistence():
     assert notif["summary"] == summary_text
 
     # Verify via API endpoints
-    inc_res = client.get(f"/api/live/incidents?owner_id={owner}").json()
+    c = get_client(owner)
+    inc_res = c.get("/api/live/incidents").json()
     assert len(inc_res["incidents"]) >= 1
     found_inc = [i for i in inc_res["incidents"] if i["id"] == inc["id"]][0]
     assert found_inc["summary"] == summary_text
 
-    notif_res = client.get(f"/api/live/notifications?owner_id={owner}").json()
+    notif_res = c.get("/api/live/notifications").json()
     assert len(notif_res["notifications"]) >= 1
     found_notif = [n for n in notif_res["notifications"] if n["id"] == notif["id"]][0]
     assert found_notif["summary"] == summary_text

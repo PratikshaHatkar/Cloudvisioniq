@@ -96,3 +96,28 @@ class ChatQueryResponse(BaseModel):
     total: int
     retrieval_method: str
     limitations: List[str]
+
+# -------------------------------------------------------------
+# Authentication Schemas
+# -------------------------------------------------------------
+class UserRegisterRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="Full Name")
+    email: str = Field(..., min_length=3, max_length=255, description="Email Address")
+    password: str = Field(..., min_length=6, max_length=128, description="Password (min 6 characters)")
+
+class UserLoginRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=255, description="Email Address")
+    password: str = Field(..., min_length=1, description="Password")
+
+class UserProfileResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    created_at: Optional[datetime] = None
+
+class AuthResponse(BaseModel):
+    status: str = "success"
+    message: str
+    access_token: str
+    token_type: str = "bearer"
+    user: UserProfileResponse

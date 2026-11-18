@@ -8,29 +8,73 @@ export const apiClient = axios.create({
   headers: {
     'Accept': 'application/json',
   },
+  withCredentials: true,
 });
 
-// Helper to get fully qualified evidence image URL
+// Request interceptor: attach Bearer token from localStorage if present
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('visioniq_token');
+    if (token && !config.headers.Authorization) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor: handle 401 unauthenticated
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      // Don't loop if the failing request is /api/auth/me or /api/auth/login
+      const url = error.config?.url || '';
+      if (!url.includes('/api/auth/login') && !url.includes('/api/auth/me') && !url.includes('/api/auth/register')) {
+        localStorage.removeItem('visioniq_token');
+        localStorage.removeItem('visioniq_user');
+        // Let application state handle redirects gracefully
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Helper to get fully qualified evidence image URL with token
 export const getEvidenceUrl = (snapshotPath) => {
   if (!snapshotPath) return null;
+  const token = localStorage.getItem('visioniq_token');
   if (snapshotPath.startsWith('http://') || snapshotPath.startsWith('https://')) {
-    return snapshotPath;
+    if (!token) return snapshotPath;
+    const sep = snapshotPath.includes('?') ? '&' : '?';
+    return `${snapshotPath}${sep}token=${encodeURIComponent(token)}`;
   }
   const cleanPath = snapshotPath.startsWith('/') ? snapshotPath : `/${snapshotPath}`;
-  return `${BASE_URL}${cleanPath}`;
+  const base = `${BASE_URL}${cleanPath}`;
+  if (!token) return base;
+  const sep = base.includes('?') ? '&' : '?';
+  return `${base}${sep}token=${encodeURIComponent(token)}`;
 };
 
-// Helper to get live camera MJPEG stream URL
+// Helper to get live camera MJPEG stream URL with token
 export const getLiveStreamUrl = (cameraId) => {
   if (!cameraId) return null;
-  return `${BASE_URL}/api/live/cameras/${cameraId}/stream`;
+  const token = localStorage.getItem('visioniq_token');
+  const base = `${BASE_URL}/api/live/cameras/${cameraId}/stream`;
+  if (!token) return base;
+  return `${base}?token=${encodeURIComponent(token)}`;
 };
 
 // Helper to get WebSocket URL for live notifications
-export const getWebSocketUrl = (ownerId = 'default_owner') => {
+export const getWebSocketUrl = (ownerId = '') => {
   const wsProtocol = BASE_URL.startsWith('https') ? 'wss' : 'ws';
   const cleanHost = BASE_URL.replace(/^https?:\/\//, '');
-  return `${wsProtocol}://${cleanHost}/api/live/ws?owner_id=${encodeURIComponent(ownerId)}`;
+  const token = localStorage.getItem('visioniq_token');
+  const params = new URLSearchParams();
+  if (token) params.append('token', token);
+  if (ownerId && ownerId !== 'default_owner') params.append('owner_id', ownerId);
+  const q = params.toString() ? `?${params.toString()}` : '';
+  return `${wsProtocol}://${cleanHost}/api/live/ws${q}`;
 };
 
 // API Services
@@ -41,7 +85,28 @@ export const api = {
     return res.data;
   },
 
-  // 2. Video Upload
+  // 2. Authentication APIs
+  async register({ name, email, password }) {
+    const res = await apiClient.post('/api/auth/register', { name, email, password });
+    return res.data;
+  },
+
+  async login({ email, password }) {
+    const res = await apiClient.post('/api/auth/login', { email, password });
+    return res.data;
+  },
+
+  async logout() {
+    const res = await apiClient.post('/api/auth/logout');
+    return res.data;
+  },
+
+  async getCurrentUser() {
+    const res = await apiClient.get('/api/auth/me');
+    return res.data;
+  },
+
+  // 3. Video Upload
   async uploadVideo(file, onProgress) {
     const formData = new FormData();
     formData.append('file', file);
@@ -60,7 +125,7 @@ export const api = {
     return res.data;
   },
 
-  // 3. Process Video
+  // 4. Process Video
   async processVideo(videoId, { confidenceThreshold = 0.40, windowSec = 2.0, strideSec = 1.0 } = {}) {
     const res = await apiClient.post(`/api/videos/${videoId}/process`, null, {
       params: {
@@ -72,13 +137,13 @@ export const api = {
     return res.data;
   },
 
-  // 4. Video Status
+  // 5. Video Status
   async getVideoStatus(videoId) {
     const res = await apiClient.get(`/api/videos/${videoId}/status`);
     return res.data;
   },
 
-  // 5. List Videos
+  // 6. List Videos
   async getVideos(limit = 50, offset = 0) {
     const res = await apiClient.get('/api/videos', {
       params: { limit, offset },
@@ -86,13 +151,27 @@ export const api = {
     return res.data;
   },
 
-  // 6. Video Events
+  // 7. Delete Video
+  async deleteVideo(videoId) {
+    const res = await apiClient.delete(`/api/videos/${videoId}`);
+    return res.data;
+  },
+
+  // 8. Video Download URL
+  getVideoDownloadUrl(videoId) {
+    const token = localStorage.getItem('visioniq_token');
+    const base = `${BASE_URL}/api/videos/${videoId}/download`;
+    if (!token) return base;
+    return `${base}?token=${encodeURIComponent(token)}`;
+  },
+
+  // 9. Video Events
   async getVideoEvents(videoId) {
     const res = await apiClient.get(`/api/videos/${videoId}/events`);
     return res.data;
   },
 
-  // 7. Cross-Video Filtered Events
+  // 10. Cross-Video Filtered Events
   async getEvents({ activity, videoId, minConfidence, limit = 50, offset = 0 } = {}) {
     const params = { limit, offset };
     if (activity && activity !== 'ALL') params.activity = activity;
@@ -105,19 +184,19 @@ export const api = {
     return res.data;
   },
 
-  // 8. Delete All Events History
+  // 11. Delete All Events History
   async clearAllEvents() {
     const res = await apiClient.delete('/api/events');
     return res.data;
   },
 
-  // 9. Delete Single Event
+  // 12. Delete Single Event
   async deleteEvent(eventId) {
     const res = await apiClient.delete(`/api/events/${eventId}`);
     return res.data;
   },
 
-  // 10. Semantic Search & Grounded AI Chatbot
+  // 13. Semantic Search & Grounded AI Chatbot
   async chatQuery({ query, video_id, activity, min_confidence, limit = 10 } = {}) {
     const res = await apiClient.post('/api/chat/query', {
       query,
@@ -129,7 +208,7 @@ export const api = {
     return res.data;
   },
 
-  // 9. Live CCTV Surveillance APIs
+  // 14. Live CCTV Surveillance APIs
   async listCameras(ownerId) {
     const params = ownerId ? { owner_id: ownerId } : {};
     const res = await apiClient.get('/api/live/cameras', { params });

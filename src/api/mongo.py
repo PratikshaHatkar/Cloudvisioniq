@@ -53,17 +53,24 @@ def init_mongo_indexes(db: Database) -> None:
     # 1. Videos Collection Indexes
     videos_col = db["videos"]
     videos_col.create_index([("video_id", pymongo.ASCENDING)], unique=True, name="idx_video_id_unique")
+    videos_col.create_index([("user_id", pymongo.ASCENDING)], name="idx_video_user_id")
     videos_col.create_index([("processing_status", pymongo.ASCENDING)], name="idx_processing_status")
     videos_col.create_index([("created_at", pymongo.DESCENDING)], name="idx_videos_created_at")
 
     # 2. Events Collection Indexes
     events_col = db["events"]
     events_col.create_index([("event_id", pymongo.ASCENDING)], unique=True, name="idx_event_id_unique")
+    events_col.create_index([("user_id", pymongo.ASCENDING)], name="idx_event_user_id")
     events_col.create_index([("video_id", pymongo.ASCENDING)], name="idx_event_video_id")
     events_col.create_index([("activity_label", pymongo.ASCENDING)], name="idx_activity_label")
     events_col.create_index([("start_timestamp", pymongo.ASCENDING)], name="idx_start_timestamp")
     events_col.create_index([("confidence", pymongo.DESCENDING)], name="idx_confidence")
     events_col.create_index([("created_at", pymongo.DESCENDING)], name="idx_events_created_at")
+
+    # 3. Users Collection Indexes
+    users_col = db["users"]
+    users_col.create_index([("email", pymongo.ASCENDING)], unique=True, name="idx_user_email_unique")
+    users_col.create_index([("user_id", pymongo.ASCENDING)], unique=True, name="idx_user_id_unique")
 
 def check_mongo_connection() -> Tuple[bool, str]:
     """

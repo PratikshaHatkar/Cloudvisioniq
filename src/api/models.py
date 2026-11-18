@@ -7,10 +7,23 @@ from src.api.database import Base
 def utc_now():
     return datetime.now(timezone.utc)
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    videos = relationship("Video", back_populates="user", cascade="all, delete-orphan")
+
 class Video(Base):
     __tablename__ = "videos"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     filename = Column(String(255), nullable=False)
     file_path = Column(String(500), nullable=False)
     file_size = Column(Integer, nullable=False, default=0)
@@ -24,12 +37,14 @@ class Video(Base):
     created_at = Column(DateTime, default=utc_now, nullable=False)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
+    user = relationship("User", back_populates="videos")
     events = relationship("Event", back_populates="video", cascade="all, delete-orphan", order_by="Event.start_timestamp")
 
 class Event(Base):
     __tablename__ = "events"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    user_id = Column(String(36), nullable=True, index=True)
     video_id = Column(String(36), ForeignKey("videos.id", ondelete="CASCADE"), nullable=False, index=True)
     activity_label = Column(String(50), nullable=False, index=True)
     confidence = Column(Float, nullable=False)

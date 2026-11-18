@@ -19,8 +19,11 @@ import { api, getLiveStreamUrl, getWebSocketUrl } from '../api/client';
 import { ActivityBadge } from '../components/StatusBadge';
 import AddCameraModal from '../components/AddCameraModal';
 import EvidenceModal from '../components/EvidenceModal';
+import { useAuth } from '../context/AuthContext';
 
 export const LiveSurveillancePage = () => {
+  const { user } = useAuth();
+  const ownerId = user?.id || user?.user_id || 'default_owner';
   const [cameras, setCameras] = useState([]);
   const [incidents, setIncidents] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -34,7 +37,6 @@ export const LiveSurveillancePage = () => {
   const [wsConnected, setWsConnected] = useState(false);
   const [liveToast, setLiveToast] = useState(null);
 
-  const ownerId = 'default_owner';
   const wsRef = useRef(null);
 
   // Fetch initial data

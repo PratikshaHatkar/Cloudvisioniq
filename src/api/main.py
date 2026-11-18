@@ -1,10 +1,10 @@
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Query, BackgroundTasks, status
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Query, BackgroundTasks, status, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -18,7 +18,13 @@ from src.api.storage import get_storage
 from src.api.schemas import (
     HealthResponse, VideoUploadResponse, VideoProcessResponse,
     VideoStatusResponse, VideosListResponse, EventResponse, EventsListResponse,
-    ChatQueryRequest, ChatQueryResponse, ChatEventRecord
+    ChatQueryRequest, ChatQueryResponse, ChatEventRecord,
+    UserRegisterRequest, UserLoginRequest, UserProfileResponse, AuthResponse
+)
+from src.api.auth import (
+    get_current_user, get_optional_current_user,
+    hash_password, verify_password, create_access_token,
+    validate_email, validate_password
 )
 from src.api.service import (
     ModelManager, probe_video_file, process_video_background
@@ -58,10 +64,16 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Enable CORS for future frontend integration
+# Enable CORS for frontend integration (supporting cookies and credentials)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+    ],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:[0-9]+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -112,15 +124,139 @@ def health_check():
     )
 
 # -------------------------------------------------------------
-# 2. Video Upload Endpoint
+# 2. Authentication Endpoints
+# -------------------------------------------------------------
+@app.post("/api/auth/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED, tags=["Authentication"])
+async def register(payload: UserRegisterRequest, response: Response):
+    """
+    Registers a new user account with hashed password and generates an authenticated JWT session.
+    """
+    name = payload.name.strip()
+    email = payload.email.strip().lower()
+
+    if not validate_email(email):
+        raise HTTPException(status_code=400, detail="Invalid email address format.")
+
+    is_valid_pw, pw_err = validate_password(payload.password)
+    if not is_valid_pw:
+        raise HTTPException(status_code=400, detail=pw_err)
+
+    storage = get_storage()
+    existing_user = storage.get_user_by_email(email)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email address already exists. Please log in."
+        )
+
+    user_id = str(uuid.uuid4())
+    pw_hash = hash_password(payload.password)
+
+    new_user = storage.create_user({
+        "id": user_id,
+        "name": name,
+        "email": email,
+        "password_hash": pw_hash,
+        "created_at": datetime.now(timezone.utc)
+    })
+
+    token = create_access_token({"sub": user_id, "email": email})
+
+    # Set secure HttpOnly cookie for session persistence across page refreshes
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 7,
+        path="/"
+    )
+
+    return AuthResponse(
+        status="success",
+        message="Account registered successfully.",
+        access_token=token,
+        token_type="bearer",
+        user=UserProfileResponse(
+            id=new_user["id"],
+            name=new_user["name"],
+            email=new_user["email"],
+            created_at=new_user.get("created_at")
+        )
+    )
+
+@app.post("/api/auth/login", response_model=AuthResponse, tags=["Authentication"])
+async def login(payload: UserLoginRequest, response: Response):
+    """
+    Authenticates user credentials against the database and establishes a secure session.
+    """
+    email = payload.email.strip().lower()
+    storage = get_storage()
+    user = storage.get_user_by_email(email)
+
+    if not user or not verify_password(payload.password, user.get("password_hash", "")):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password."
+        )
+
+    user_id = user.get("id") or user.get("user_id")
+    token = create_access_token({"sub": user_id, "email": email})
+
+    # Set secure HttpOnly cookie
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 7,
+        path="/"
+    )
+
+    return AuthResponse(
+        status="success",
+        message="Login successful.",
+        access_token=token,
+        token_type="bearer",
+        user=UserProfileResponse(
+            id=user_id,
+            name=user.get("name", "User"),
+            email=user.get("email"),
+            created_at=user.get("created_at")
+        )
+    )
+
+@app.post("/api/auth/logout", tags=["Authentication"])
+async def logout(response: Response):
+    """
+    Logs out the current user and clears the authentication session cookie.
+    """
+    response.delete_cookie(key="access_token", path="/")
+    return {"status": "success", "message": "Successfully logged out."}
+
+@app.get("/api/auth/me", response_model=UserProfileResponse, tags=["Authentication"])
+async def get_current_user_profile(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """
+    Returns the authenticated user's profile information.
+    """
+    return UserProfileResponse(
+        id=current_user["id"],
+        name=current_user["name"],
+        email=current_user["email"],
+        created_at=current_user.get("created_at")
+    )
+
+# -------------------------------------------------------------
+# 3. Video Upload Endpoint (User Scoped)
 # -------------------------------------------------------------
 @app.post("/api/videos/upload", response_model=VideoUploadResponse, status_code=status.HTTP_201_CREATED, tags=["Videos"])
 async def upload_video(
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Validates and stores an uploaded CCTV video file, returns metadata and unique video_id.
-    Persists video document to MongoDB and mirrors to SQLite.
+    Persists video document to MongoDB and mirrors to SQLite, associating with authenticated user.
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file uploaded.")
@@ -162,10 +298,11 @@ async def upload_video(
             os.remove(destination_path)
         raise HTTPException(status_code=400, detail=f"Invalid or corrupted video: {str(e)}")
 
-    # Store in database via StorageRepository
+    # Store in database via StorageRepository with authenticated user ownership
     storage = get_storage()
     video_record = storage.create_video({
         "video_id": video_id,
+        "user_id": current_user["id"],
         "filename": file.filename,
         "file_path": destination_path,
         "file_size": bytes_written,
@@ -177,7 +314,7 @@ async def upload_video(
         "height": meta.get("height"),
         "resolution": meta.get("resolution"),
         "created_at": datetime.now(timezone.utc)
-    })
+    }, user_id=current_user["id"])
 
     return VideoUploadResponse(
         video_id=video_record["video_id"],
@@ -191,7 +328,7 @@ async def upload_video(
     )
 
 # -------------------------------------------------------------
-# 3. Video Processing Endpoint
+# 4. Video Processing Endpoint (User Scoped)
 # -------------------------------------------------------------
 @app.post("/api/videos/{video_id}/process", response_model=VideoProcessResponse, tags=["Videos"])
 def process_video(
@@ -199,13 +336,15 @@ def process_video(
     background_tasks: BackgroundTasks,
     confidence_threshold: float = Query(DEFAULT_CONFIDENCE_THRESHOLD, ge=0.0, le=1.0),
     window_sec: float = Query(DEFAULT_WINDOW_SEC, gt=0.0),
-    stride_sec: float = Query(DEFAULT_STRIDE_SEC, gt=0.0)
+    stride_sec: float = Query(DEFAULT_STRIDE_SEC, gt=0.0),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Initiates asynchronous action recognition processing for an uploaded video.
+    Initiates asynchronous action recognition processing for a user's uploaded video.
+    Prevents IDOR by verifying user ownership.
     """
     storage = get_storage()
-    video = storage.get_video(video_id)
+    video = storage.get_video(video_id, user_id=current_user["id"])
     if not video:
         raise HTTPException(status_code=404, detail=f"Video '{video_id}' not found.")
 
@@ -234,18 +373,19 @@ def process_video(
     )
 
 # -------------------------------------------------------------
-# 4. List All Videos Endpoint
+# 5. List All User Videos Endpoint (User Scoped)
 # -------------------------------------------------------------
 @app.get("/api/videos", response_model=VideosListResponse, tags=["Videos"])
 def list_videos(
     limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0)
+    offset: int = Query(0, ge=0),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Retrieves all uploaded videos with pagination, event counts, and processing statuses.
+    Retrieves uploaded videos belonging exclusively to the authenticated user.
     """
     storage = get_storage()
-    total, videos = storage.list_videos(limit=limit, offset=offset)
+    total, videos = storage.list_videos(limit=limit, offset=offset, user_id=current_user["id"])
 
     return VideosListResponse(
         total=total,
@@ -254,7 +394,7 @@ def list_videos(
                 video_id=v["video_id"],
                 filename=v["filename"],
                 status=v["status"],
-                events_count=storage.get_video_events_count(v["video_id"]),
+                events_count=storage.get_video_events_count(v["video_id"], user_id=current_user["id"]),
                 duration=v.get("duration"),
                 fps=v.get("fps"),
                 error_message=v.get("error_message"),
@@ -266,19 +406,23 @@ def list_videos(
     )
 
 # -------------------------------------------------------------
-# 5. Video Status Endpoint
+# 6. Video Status Endpoint (User Scoped)
 # -------------------------------------------------------------
 @app.get("/api/videos/{video_id}/status", response_model=VideoStatusResponse, tags=["Videos"])
-def get_video_status(video_id: str):
+def get_video_status(
+    video_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """
-    Reports current status (uploaded, processing, completed, failed) and event count.
+    Reports current status and event count for a user's video.
+    Prevents IDOR by verifying user ownership.
     """
     storage = get_storage()
-    video = storage.get_video(video_id)
+    video = storage.get_video(video_id, user_id=current_user["id"])
     if not video:
         raise HTTPException(status_code=404, detail=f"Video '{video_id}' not found.")
 
-    events_count = storage.get_video_events_count(video_id)
+    events_count = storage.get_video_events_count(video_id, user_id=current_user["id"])
 
     return VideoStatusResponse(
         video_id=video["video_id"],
@@ -292,20 +436,64 @@ def get_video_status(video_id: str):
         updated_at=video.get("updated_at") or video["created_at"]
     )
 
-# -------------------------------------------------------------
-# 5. Video Events Endpoint
-# -------------------------------------------------------------
-@app.get("/api/videos/{video_id}/events", response_model=List[EventResponse], tags=["Events"])
-def get_video_events(video_id: str):
+@app.delete("/api/videos/{video_id}", tags=["Videos"])
+def delete_video(
+    video_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """
-    Returns detected suspicious activity events for a specific video.
+    Deletes an uploaded video, its physical file from disk, and all associated detected events.
+    Enforces user ownership to prevent IDOR attacks.
     """
     storage = get_storage()
-    video = storage.get_video(video_id)
+    deleted = storage.delete_video(video_id, user_id=current_user["id"])
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Video with ID '{video_id}' not found."
+        )
+    return {
+        "status": "success",
+        "message": f"Video '{video_id}' deleted successfully.",
+        "video_id": video_id
+    }
+
+@app.get("/api/videos/{video_id}/download", tags=["Videos"])
+def download_video(
+    video_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Downloads the underlying video file.
+    Enforces user ownership to prevent unauthorized access.
+    """
+    storage = get_storage()
+    video = storage.get_video(video_id, user_id=current_user["id"])
+    if not video:
+        raise HTTPException(status_code=404, detail=f"Video '{video_id}' not found.")
+    file_path = video.get("file_path")
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Video file not found on disk.")
+    return FileResponse(file_path, filename=video.get("filename", f"{video_id}.mp4"))
+
+# -------------------------------------------------------------
+# 7. Video Events Endpoint (User Scoped)
+# -------------------------------------------------------------
+@app.get("/api/videos/{video_id}/events", response_model=List[EventResponse], tags=["Events"])
+def get_video_events(
+    video_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Returns detected suspicious activity events for a specific user video.
+    Prevents IDOR by verifying user ownership.
+    """
+    storage = get_storage()
+    video = storage.get_video(video_id, user_id=current_user["id"])
     if not video:
         raise HTTPException(status_code=404, detail=f"Video '{video_id}' not found.")
 
-    events = storage.get_video_events(video_id)
+    events = storage.get_video_events(video_id, user_id=current_user["id"])
     return [
         EventResponse(
             event_id=ev["event_id"],
@@ -319,13 +507,13 @@ def get_video_events(video_id: str):
             evidence_snapshot=ev.get("evidence_snapshot"),
             evidence_clip=ev.get("evidence_clip"),
             processing_status=ev.get("processing_status", "completed"),
-            created_at=ev["created_at"]
+            created_at=ev.get("created_at") or datetime.now(timezone.utc)
         )
         for ev in events
     ]
 
 # -------------------------------------------------------------
-# 6. Cross-Video Events Query & Filter Endpoint
+# 8. Cross-Video Events Query & Filter Endpoint (User Scoped)
 # -------------------------------------------------------------
 @app.get("/api/events", response_model=EventsListResponse, tags=["Events"])
 def list_events(
@@ -333,11 +521,11 @@ def list_events(
     video_id: Optional[str] = Query(None, description="Filter by specific video ID"),
     min_confidence: Optional[float] = Query(None, ge=0.0, le=1.0, description="Minimum confidence threshold"),
     limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0)
+    offset: int = Query(0, ge=0),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Retrieves events across all videos with optional filtering by activity, video ID, or minimum confidence.
-    Leverages indexed queries in MongoDB with automatic SQLite fallback.
+    Retrieves events across all videos belonging exclusively to the authenticated user.
     """
     storage = get_storage()
     total, events = storage.list_events(
@@ -345,7 +533,8 @@ def list_events(
         video_id=video_id,
         min_confidence=min_confidence,
         limit=limit,
-        offset=offset
+        offset=offset,
+        user_id=current_user["id"]
     )
 
     return EventsListResponse(
@@ -363,20 +552,20 @@ def list_events(
                 evidence_snapshot=ev.get("evidence_snapshot"),
                 evidence_clip=ev.get("evidence_clip"),
                 processing_status=ev.get("processing_status", "completed"),
-                created_at=ev["created_at"]
+                created_at=ev.get("created_at") or datetime.now(timezone.utc)
             )
             for ev in events
         ]
     )
 
 @app.delete("/api/events", tags=["Events"])
-def clear_all_events():
+def clear_all_events(current_user: Dict[str, Any] = Depends(get_current_user)):
     """
-    Deletes all detected suspicious events history across MongoDB and SQLite.
-    Resets the detected event counter to zero.
+    Deletes all detected suspicious events history belonging exclusively to the authenticated user.
+    Resets the detected event counter to zero for this user.
     """
     storage = get_storage()
-    deleted_count = storage.delete_all_events()
+    deleted_count = storage.delete_all_events(user_id=current_user["id"])
     return {
         "status": "success",
         "message": f"Successfully cleared {deleted_count} suspicious events.",
@@ -384,12 +573,16 @@ def clear_all_events():
     }
 
 @app.delete("/api/events/{event_id}", tags=["Events"])
-def delete_single_event(event_id: str):
+def delete_single_event(
+    event_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """
-    Deletes a single suspicious event by its event_id.
+    Deletes a single suspicious event belonging to the authenticated user.
+    Prevents IDOR by verifying user ownership.
     """
     storage = get_storage()
-    deleted = storage.delete_event(event_id)
+    deleted = storage.delete_event(event_id, user_id=current_user["id"])
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -402,12 +595,16 @@ def delete_single_event(event_id: str):
     }
 
 # -------------------------------------------------------------
-# 7. Evidence Snapshot Serving Endpoint
+# 9. Evidence Snapshot Serving Endpoint (User Scoped)
 # -------------------------------------------------------------
 @app.get("/api/evidence/{filename}", tags=["Evidence"])
-def get_evidence_snapshot(filename: str):
+def get_evidence_snapshot(
+    filename: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """
-    Safely serves an evidence snapshot image from disk with path-traversal prevention.
+    Safely serves an evidence snapshot image from disk.
+    Enforces user ownership validation to prevent unauthorized access or IDOR.
     """
     clean_filename = os.path.basename(filename)
     file_path = os.path.join(EVIDENCE_DIR, clean_filename)
@@ -415,23 +612,31 @@ def get_evidence_snapshot(filename: str):
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Evidence snapshot not found.")
 
+    storage = get_storage()
+    if not storage.is_evidence_owned_by_user(clean_filename, current_user["id"]):
+        raise HTTPException(status_code=404, detail="Evidence snapshot not found.")
+
     return FileResponse(file_path, media_type="image/jpeg")
 
 # -------------------------------------------------------------
-# 8. Semantic Search & Grounded AI Chatbot Endpoint
+# 10. Semantic Search & Grounded AI Chatbot Endpoint (User Scoped)
 # -------------------------------------------------------------
 @app.post("/api/chat/query", response_model=ChatQueryResponse, tags=["AI Chatbot"])
-def chat_query(request: ChatQueryRequest):
+def chat_query(
+    request: ChatQueryRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """
-    Executes hybrid semantic search and grounded AI question answering over stored CCTV events.
-    Matches activities, confidence scores, and time ranges, and grounds all answers in real evidence.
+    Executes hybrid semantic search and grounded AI question answering strictly over
+    the authenticated user's CCTV events. Prevents cross-user data exposure.
     """
     res = execute_chat_query(
         query=request.query,
         video_id=request.video_id,
         activity=request.activity,
         min_confidence=request.min_confidence,
-        limit=request.limit
+        limit=request.limit,
+        user_id=current_user["id"]
     )
 
     return ChatQueryResponse(
@@ -460,6 +665,6 @@ def chat_query(request: ChatQueryRequest):
     )
 
 # -------------------------------------------------------------
-# 9. Live CCTV Surveillance Router
+# 11. Live CCTV Surveillance Router
 # -------------------------------------------------------------
 app.include_router(live_router, prefix="/api/live", tags=["Live Surveillance"])

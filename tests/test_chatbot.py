@@ -163,15 +163,29 @@ def test_08_chat_query_api_endpoint():
     """
     Tests POST /api/chat/query endpoint using FastAPI TestClient.
     """
+    # 0. Unauthenticated call blocked
+    res_unauth = client.post("/api/chat/query", json={"query": "Show burglary"})
+    assert res_unauth.status_code == 401
+
+    # Create test user for authenticated testing
+    from src.api.storage import get_storage
+    storage = get_storage()
+    u = storage.get_user_by_email("chatbot.test@visioniq.io")
+    if not u:
+        u = storage.create_user("Chatbot Tester", "chatbot.test@visioniq.io", "hashed_pw")
+    from src.api.auth import create_access_token
+    token = create_access_token({"sub": u["id"], "email": u["email"]})
+    headers = {"Authorization": f"Bearer {token}"}
+
     # 1. Validation error on empty query
-    res_bad = client.post("/api/chat/query", json={"query": ""})
+    res_bad = client.post("/api/chat/query", json={"query": ""}, headers=headers)
     assert res_bad.status_code == 422
 
     # 2. Query for existing or known activity
     res = client.post("/api/chat/query", json={
         "query": "Show burglary incidents with confidence above 60%",
         "limit": 5
-    })
+    }, headers=headers)
     assert res.status_code == 200
     data = res.json()
     assert "query" in data
@@ -186,7 +200,7 @@ def test_08_chat_query_api_endpoint():
     res_unknown = client.post("/api/chat/query", json={
         "query": "Show alien abduction footage",
         "limit": 5
-    })
+    }, headers=headers)
     assert res_unknown.status_code == 200
     data_unknown = res_unknown.json()
     assert "No suspicious events matching" in data_unknown["answer"]

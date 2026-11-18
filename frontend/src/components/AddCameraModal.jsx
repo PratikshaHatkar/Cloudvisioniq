@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { X, Video, Sliders, CheckCircle2, AlertCircle } from 'lucide-react';
 import { api } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 
 export const AddCameraModal = ({ isOpen, onClose, onCameraAdded }) => {
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     location: '',
-    owner_id: 'default_owner',
+    owner_id: user?.id || 'default_owner',
     stream_type: 'synthetic',
     stream_url: 'synthetic:0',
     confidence_threshold: 0.50,

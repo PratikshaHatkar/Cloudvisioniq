@@ -10,7 +10,8 @@ import {
   RefreshCw,
   CheckCircle2,
   XCircle,
-  Sparkles
+  Sparkles,
+  Trash2
 } from 'lucide-react';
 import { api } from '../api/client';
 import { StatusBadge } from '../components/StatusBadge';
@@ -178,6 +179,22 @@ export const VideoAnalysisPage = () => {
       setIsProcessing(false);
       const msg = err.response?.data?.detail || err.message || 'Failed to start processing.';
       setProcessError(msg);
+    }
+  };
+
+  const handleDeleteVideo = async (videoId) => {
+    if (!window.confirm('Are you sure you want to delete this video and its associated detection events?')) {
+      return;
+    }
+    try {
+      await api.deleteVideo(videoId);
+      setRecentVideos((prev) => prev.filter((v) => v.video_id !== videoId));
+      if (uploadedVideo?.video_id === videoId) {
+        setUploadedVideo(null);
+        setProcessStatus(null);
+      }
+    } catch (err) {
+      alert(err.response?.data?.detail || err.message || 'Failed to delete video.');
     }
   };
 
@@ -553,6 +570,13 @@ export const VideoAnalysisPage = () => {
                       >
                         View Events
                       </Link>
+                      <button
+                        onClick={() => handleDeleteVideo(vid.video_id)}
+                        className="px-2 py-1 text-[11px] font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-all inline-block cursor-pointer"
+                        title="Delete Video"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 inline" />
+                      </button>
                     </td>
                   </tr>
                 ))}

@@ -76,11 +76,13 @@ def execute_chat_query(
     video_id: Optional[str] = None,
     activity: Optional[str] = None,
     min_confidence: Optional[float] = None,
-    limit: int = 10
+    limit: int = 10,
+    user_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Executes hybrid retrieval: natural-language parsing, database filtering,
     time reconciliation, semantic relevance ranking, and grounded answer synthesis.
+    Strictly scoped to user_id to preserve privacy.
     """
     repo = get_storage()
     ranker = get_semantic_ranker()
@@ -98,13 +100,14 @@ def execute_chat_query(
         time_notes.append("System security notice: Potentially unsafe control keywords were sanitized from the query.")
 
     # 2. Database Retrieval
-    # Query database for candidate events using parsed or explicit filters
+    # Query database for candidate events using parsed or explicit filters (scoped to user_id)
     _, candidate_events = repo.list_events(
         activity=parsed.get("activity"),
         video_id=parsed.get("video_id"),
         min_confidence=parsed.get("min_confidence"),
         limit=100,  # Broader pool for ranking and time evaluation
-        offset=0
+        offset=0,
+        user_id=user_id
     )
 
     # 3. Lookup parent video metadata for filename and creation timestamp
@@ -114,7 +117,7 @@ def execute_chat_query(
 
     for ev in candidate_events:
         vid_id = ev.get("video_id")
-        video_doc = repo.get_video(vid_id) if vid_id else None
+        video_doc = repo.get_video(vid_id, user_id=user_id) if vid_id else None
 
         filename = video_doc.get("filename", "") if video_doc else ""
         video_lookup[vid_id] = filename

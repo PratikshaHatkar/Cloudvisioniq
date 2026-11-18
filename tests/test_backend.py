@@ -33,10 +33,20 @@ def create_synthetic_mp4(filepath: str, num_frames: int = 30, fps: int = 30, wid
 @pytest.fixture(scope="module", autouse=True)
 def setup_test_environment():
     """
-    Initializes DB and preloads model for backend testing.
+    Initializes DB, preloads model, and provisions authenticated session for backend testing.
     """
     init_db()
     ModelManager.get_instance().load_model()
+
+    from src.api.storage import get_storage
+    from src.api.auth import create_access_token
+    storage = get_storage()
+    storage.initialize()
+    user = storage.get_user_by_email("backend.tester@visioniq.io")
+    if not user:
+        user = storage.create_user("Backend Tester", "backend.tester@visioniq.io", "hashed_pw")
+    token = create_access_token({"sub": user["id"], "email": user["email"]})
+    client.headers.update({"Authorization": f"Bearer {token}"})
     yield
 
 def test_01_health_endpoint():
@@ -214,17 +224,22 @@ def test_11_cross_video_events_filtering():
     ev1_id = f"ev-1-{uid}"
     ev2_id = f"ev-2-{uid}"
 
+    from src.api.storage import get_storage
+    storage = get_storage()
+    u = storage.get_user_by_email("backend.tester@visioniq.io")
+    test_user_id = u["id"] if u else None
+
     db = SessionLocal()
-    vid = Video(id=test_vid_id, filename="dummy.mp4", file_path="dummy.mp4", status="completed")
+    vid = Video(id=test_vid_id, user_id=test_user_id, filename="dummy.mp4", file_path="dummy.mp4", status="completed")
     db.add(vid)
     ev1 = Event(
-        id=ev1_id, video_id=test_vid_id, activity_label="Fighting",
+        id=ev1_id, user_id=test_user_id, video_id=test_vid_id, activity_label="Fighting",
         confidence=0.92, start_timestamp=2.0, end_timestamp=4.0,
         start_time_formatted="00:00:02", end_time_formatted="00:00:04",
         processing_status="completed"
     )
     ev2 = Event(
-        id=ev2_id, video_id=test_vid_id, activity_label="Robbery",
+        id=ev2_id, user_id=test_user_id, video_id=test_vid_id, activity_label="Robbery",
         confidence=0.65, start_timestamp=10.0, end_timestamp=15.0,
         start_time_formatted="00:00:10", end_time_formatted="00:00:15",
         processing_status="completed"
@@ -260,11 +275,16 @@ def test_12_delete_events_endpoints():
     test_vid_id = f"del-test-{uid}"
     ev_del_id = f"ev-del-{uid}"
 
+    from src.api.storage import get_storage
+    storage = get_storage()
+    u = storage.get_user_by_email("backend.tester@visioniq.io")
+    test_user_id = u["id"] if u else None
+
     db = SessionLocal()
-    vid = Video(id=test_vid_id, filename="dummy_del.mp4", file_path="dummy_del.mp4", status="completed")
+    vid = Video(id=test_vid_id, user_id=test_user_id, filename="dummy_del.mp4", file_path="dummy_del.mp4", status="completed")
     db.add(vid)
     ev = Event(
-        id=ev_del_id, video_id=test_vid_id, activity_label="Burglary",
+        id=ev_del_id, user_id=test_user_id, video_id=test_vid_id, activity_label="Burglary",
         confidence=0.88, start_timestamp=1.0, end_timestamp=3.0,
         start_time_formatted="00:00:01", end_time_formatted="00:00:03",
         processing_status="completed"
@@ -285,7 +305,7 @@ def test_12_delete_events_endpoints():
     # Add another event and verify clear all events endpoint
     db = SessionLocal()
     ev2 = Event(
-        id=f"ev-clear-{uid}", video_id=test_vid_id, activity_label="Fighting",
+        id=f"ev-clear-{uid}", user_id=test_user_id, video_id=test_vid_id, activity_label="Fighting",
         confidence=0.95, start_timestamp=5.0, end_timestamp=8.0,
         start_time_formatted="00:00:05", end_time_formatted="00:00:08",
         processing_status="completed"
